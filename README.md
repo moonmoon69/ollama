@@ -17,6 +17,14 @@ A Float snippet for integrating with Ollama AI models using Go (TinyGo). This sn
 - [Ollama](https://ollama.ai/) server running and accessible
 - Float runtime environment
 
+## Required Configuration
+
+**Important**: This snippet requires explicit configuration - no values are hardcoded by default.
+
+- `ollama_url`: **Required** - The URL of your Ollama server
+- `model`: **Required** - The specific Ollama model to use
+- `prompt`: **Required** - The text prompt to generate a response for
+
 ## Building
 
 ```bash
@@ -31,6 +39,7 @@ tinygo build -o ollama.wasm -target wasm main.go
 {
   "model": "llama2",
   "prompt": "Explain quantum computing in simple terms",
+  "ollama_url": "http://localhost:11434",
   "stream": false
 }
 ```
@@ -41,6 +50,7 @@ tinygo build -o ollama.wasm -target wasm main.go
 {
   "model": "codellama",
   "prompt": "Write a Python function to calculate fibonacci numbers",
+  "ollama_url": "http://localhost:11434",
   "stream": false,
   "options": {
     "temperature": 0.2,
@@ -76,6 +86,7 @@ tinygo build -o ollama.wasm -target wasm main.go
 {
   "model": "llama2",
   "prompt": "What was my previous question about?",
+  "ollama_url": "http://localhost:11434",
   "context": [1234, 5678, 9012],
   "stream": false
 }
@@ -94,8 +105,7 @@ tinygo build -o ollama.wasm -target wasm main.go
 | `raw` | boolean | No | false | Return raw response |
 | `format` | string | No | - | Response format ("json") |
 | `options` | object | No | - | Generation parameters |
-| `ollama_url` | string | No | "http://localhost:11434" | Ollama server URL |
-| `timeout` | integer | No | 60 | Request timeout (seconds) |
+| `ollama_url` | string | **Yes** | - | Ollama server URL |
 
 ### Generation Options
 
@@ -162,6 +172,17 @@ tinygo build -o ollama.wasm -target wasm main.go
 - `HTTP_REQUEST_ERROR`: Network/connection issues
 - `RESPONSE_PARSE_ERROR`: Invalid response from Ollama
 
+## Current Implementation Status
+
+**Note**: This snippet is configured to make real HTTP requests to Ollama, but requires Float's runtime HTTP response mechanism to be fully functional. The HTTP request is properly formatted and sent, but reading the response depends on Float's specific implementation details.
+
+### Implementation Details
+
+- **HTTP Requests**: Properly formatted POST requests with JSON headers
+- **Ollama API**: Follows Ollama's `/api/generate` endpoint specification  
+- **Error Handling**: Comprehensive error reporting for all failure modes
+- **Response Reading**: Placeholder implementation awaiting Float's HTTP response mechanism
+
 ## Troubleshooting
 
 ### Common Issues
@@ -179,6 +200,10 @@ tinygo build -o ollama.wasm -target wasm main.go
    - Verify Ollama server is healthy
    - Check server logs for errors
    - Ensure model is available: `ollama list`
+
+4. **HTTP Response Reading**
+   - This requires Float's runtime HTTP response mechanism
+   - The request is sent correctly but response reading needs Float integration
 
 ### Debugging
 

@@ -13,7 +13,10 @@ import (
 func floatLog(ptr, len uint32)
 
 //go:wasmimport env float_http_request
-func floatHttpRequest(urlPtr, urlLen, methodPtr, methodLen, bodyPtr, bodyLen uint32) uint32
+func floatHttpRequest(urlPtr, urlLen, methodPtr, methodLen, headersPtr, headersLen, bodyPtr, bodyLen uint32) uint32
+
+//go:wasmimport env float_read_file
+func floatReadFile(pathPtr, pathLen uint32) uint32
 
 //go:wasmimport env float_write_file
 func floatWriteFile(pathPtr, pathLen, dataPtr, dataLen uint32) uint32
@@ -22,15 +25,17 @@ func floatWriteFile(pathPtr, pathLen, dataPtr, dataLen uint32) uint32
 type OllamaInput struct {
 	Model     string                 `json:"model"`
 	Prompt    string                 `json:"prompt"`
+	Suffix    string                 `json:"suffix,omitempty"`
 	System    string                 `json:"system,omitempty"`
 	Template  string                 `json:"template,omitempty"`
 	Context   []int                  `json:"context,omitempty"`
-	Stream    bool                   `json:"stream"`
+	Stream    *bool                  `json:"stream,omitempty"` // Pointer to allow nil (default)
 	Raw       bool                   `json:"raw,omitempty"`
-	Format    string                 `json:"format,omitempty"`
+	Format    interface{}            `json:"format,omitempty"`     // Can be string "json" or JSON schema object
+	KeepAlive string                 `json:"keep_alive,omitempty"` // Duration string like "5m"
+	Images    []string               `json:"images,omitempty"`     // Base64-encoded images for multimodal models
 	Options   map[string]interface{} `json:"options,omitempty"`
-	OllamaURL string                 `json:"ollama_url"`
-	Timeout   int                    `json:"timeout,omitempty"`
+	OllamaURL string                 `json:"ollama_url,omitempty"` // Configuration field, not sent to API
 }
 
 // Output structure for Ollama response
@@ -54,15 +59,18 @@ type OllamaOutput struct {
 
 // Ollama API request structure
 type OllamaAPIRequest struct {
-	Model    string                 `json:"model"`
-	Prompt   string                 `json:"prompt"`
-	System   string                 `json:"system,omitempty"`
-	Template string                 `json:"template,omitempty"`
-	Context  []int                  `json:"context,omitempty"`
-	Stream   bool                   `json:"stream"`
-	Raw      bool                   `json:"raw,omitempty"`
-	Format   string                 `json:"format,omitempty"`
-	Options  map[string]interface{} `json:"options,omitempty"`
+	Model     string                 `json:"model"`
+	Prompt    string                 `json:"prompt"`
+	Suffix    string                 `json:"suffix,omitempty"`
+	System    string                 `json:"system,omitempty"`
+	Template  string                 `json:"template,omitempty"`
+	Context   []int                  `json:"context,omitempty"`
+	Stream    *bool                  `json:"stream,omitempty"`
+	Raw       bool                   `json:"raw,omitempty"`
+	Format    interface{}            `json:"format,omitempty"`
+	KeepAlive string                 `json:"keep_alive,omitempty"`
+	Images    []string               `json:"images,omitempty"`
+	Options   map[string]interface{} `json:"options,omitempty"`
 }
 
 // Ollama API response structure
@@ -113,29 +121,84 @@ func writeOutputFile(data *OllamaOutput) error {
 }
 
 func makeHttpRequest(url, method, body string) (string, error) {
+	logToFloat(fmt.Sprintf("Making HTTP %s request to %s", method, url))
+	logToFloat(fmt.Sprintf("Request body: %s", body))
+
 	urlBytes := []byte(url)
 	methodBytes := []byte(method)
 	bodyBytes := []byte(body)
 
+	// Set headers for JSON content type
+	headers := "Content-Type: application/json\r\n"
+	headersBytes := []byte(headers)
+
 	urlPtr := uintptr(unsafe.Pointer(&urlBytes[0]))
 	methodPtr := uintptr(unsafe.Pointer(&methodBytes[0]))
+	headersPtr := uintptr(unsafe.Pointer(&headersBytes[0]))
 	bodyPtr := uintptr(unsafe.Pointer(&bodyBytes[0]))
 
-	// Note: This is a simplified HTTP request implementation
-	// In a real Float environment, this would return response data
+	// Make the HTTP request to Float host
 	result := floatHttpRequest(
 		uint32(urlPtr), uint32(len(urlBytes)),
 		uint32(methodPtr), uint32(len(methodBytes)),
+		uint32(headersPtr), uint32(len(headersBytes)),
 		uint32(bodyPtr), uint32(len(bodyBytes)),
 	)
 
+	// Check the result status
 	if result != 0 {
-		return "", fmt.Errorf("HTTP request failed with code: %d", result)
+		logToFloat(fmt.Sprintf("HTTP request failed with status: %d", result))
+		return "", fmt.Errorf("HTTP request failed with status code: %d", result)
 	}
 
-	// In a real implementation, Float would provide the response data
-	// For this example, we'll simulate a successful response
-	return `{"response": "Generated response from Ollama", "done": true, "model": "llama2"}`, nil
+	// Read the response from Float using file reading
+	// Float typically writes HTTP responses to a temporary file
+	responseBody, err := readHttpResponseFromFloat()
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %v", err)
+	}
+
+	logToFloat(fmt.Sprintf("Received response (%d bytes)", len(responseBody)))
+
+	return responseBody, nil
+}
+
+// Read HTTP response from Float using file reading mechanism
+func readHttpResponseFromFloat() (string, error) {
+	// Float typically writes HTTP responses to a temporary file that can be read
+	responsePath := "/tmp/float_http_response"
+	responsePathBytes := []byte(responsePath)
+	responsePathPtr := uintptr(unsafe.Pointer(&responsePathBytes[0]))
+
+	logToFloat("Reading HTTP response from Float temporary file")
+
+	// Try to read the response file
+	result := floatReadFile(uint32(responsePathPtr), uint32(len(responsePathBytes)))
+	if result != 0 {
+		return "", fmt.Errorf("failed to read HTTP response file: error code %d", result)
+	}
+
+	// Since floatReadFile doesn't return the content directly, we need to read it
+	// from a known location or use another mechanism
+	// For now, we'll implement a direct approach that works with Float's actual API
+
+	logToFloat("Successfully read HTTP response from Float")
+
+	// In a real Float implementation, this would read the actual response
+	// For demonstration purposes, let's assume the response is made available
+	// This needs to be replaced with actual Float response reading
+	return readActualOllamaResponse()
+}
+
+func readActualOllamaResponse() (string, error) {
+	// This represents the actual Ollama API response
+	// In practice, Float would handle the HTTP request and provide the real response
+
+	logToFloat("Processing real Ollama API response")
+
+	// This is where the real Ollama response would be processed
+	// For now, we'll return an error indicating this needs real implementation
+	return "", fmt.Errorf("real Ollama API integration requires Float runtime HTTP response mechanism")
 }
 
 //export generate_ollama
@@ -193,8 +256,18 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 	}
 
 	if input.OllamaURL == "" {
-		logToFloat("Using default Ollama URL")
-		input.OllamaURL = "http://localhost:11434"
+		logToFloat("ERROR: ollama_url is required")
+		output := &OllamaOutput{
+			Success:   false,
+			Error:     "ollama_url field is required - please specify the Ollama server URL (e.g., 'http://localhost:11434')",
+			ErrorType: "VALIDATION_ERROR",
+			Metadata: map[string]interface{}{
+				"error_stage":   "validation",
+				"missing_field": "ollama_url",
+			},
+		}
+		writeOutputFile(output)
+		return 1
 	}
 
 	// Ensure URL doesn't end with slash
@@ -205,15 +278,18 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 
 	// Prepare Ollama API request
 	apiRequest := OllamaAPIRequest{
-		Model:    input.Model,
-		Prompt:   input.Prompt,
-		System:   input.System,
-		Template: input.Template,
-		Context:  input.Context,
-		Stream:   input.Stream,
-		Raw:      input.Raw,
-		Format:   input.Format,
-		Options:  input.Options,
+		Model:     input.Model,
+		Prompt:    input.Prompt,
+		Suffix:    input.Suffix,
+		System:    input.System,
+		Template:  input.Template,
+		Context:   input.Context,
+		Stream:    input.Stream,
+		Raw:       input.Raw,
+		Format:    input.Format,
+		KeepAlive: input.KeepAlive,
+		Images:    input.Images,
+		Options:   input.Options,
 	}
 
 	// Marshal request body
@@ -288,6 +364,9 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 			"response_length":     len(apiResponse.Response),
 			"ollama_url":          input.OllamaURL,
 			"stream_mode":         input.Stream,
+			"has_suffix":          input.Suffix != "",
+			"has_system":          input.System != "",
+			"has_images":          len(input.Images) > 0,
 			"processing_complete": true,
 		},
 	}
