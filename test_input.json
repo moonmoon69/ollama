@@ -1,7 +1,7 @@
 {
   "model": "llama2",
   "prompt": "Explain the concept of machine learning in simple terms that a beginner could understand.",
-  "system": "You are a helpful AI assistant that explains complex topics in simple, easy-to-understand language.",
+  "system": "You are a helpful AI assistant that explains complex topics in simple, easy-to-understand language. Always use examples and analogies when possible.",
   "ollama_url": "http://localhost:11434",
   "stream": false,
   "keep_alive": "5m",
