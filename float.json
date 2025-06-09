@@ -1,0 +1,346 @@
+{
+  "snippet_id": "ollama-generator-go",
+  "version": "0.1.0",
+  "description": "Ollama AI model integration for text generation using Go (TinyGo)",
+  "language": "go",
+  "runtime": "tinygo",
+  "entry_point": "generate_ollama",
+  "build_command": "tinygo build -o ollama.wasm -target wasm main.go",
+  "author": "Float Team",
+  "tags": ["ollama", "ai", "text-generation", "llm", "go"],
+  "dependencies": {
+    "tinygo": ">=0.30.0",
+    "ollama": ">=0.1.0"
+  },
+  "schema": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "The Ollama model to use for generation (e.g., 'llama2', 'codellama', 'mistral')",
+          "examples": ["llama2", "codellama", "mistral", "llama2:13b"]
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The text prompt to generate a response for",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "system": {
+          "type": "string",
+          "description": "System message to set the behavior of the model",
+          "maxLength": 8192
+        },
+        "template": {
+          "type": "string",
+          "description": "The prompt template to use (overrides the model's default template)"
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Context from a previous response to maintain conversation state"
+        },
+        "stream": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to stream the response (false for complete response)"
+        },
+        "raw": {
+          "type": "boolean",
+          "default": false,
+          "description": "Return raw response without formatting"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["json"],
+          "description": "Response format specification"
+        },
+        "options": {
+          "type": "object",
+          "description": "Model-specific options for generation",
+          "properties": {
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2,
+              "default": 0.8,
+              "description": "Controls randomness in generation"
+            },
+            "top_p": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.9,
+              "description": "Nucleus sampling parameter"
+            },
+            "top_k": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 40,
+              "description": "Top-k sampling parameter"
+            },
+            "repeat_penalty": {
+              "type": "number",
+              "minimum": 0,
+              "default": 1.1,
+              "description": "Penalty for repeating tokens"
+            },
+            "seed": {
+              "type": "integer",
+              "description": "Random seed for reproducible generation"
+            },
+            "num_predict": {
+              "type": "integer",
+              "minimum": -1,
+              "default": 128,
+              "description": "Maximum number of tokens to generate (-1 for unlimited)"
+            },
+            "num_ctx": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 2048,
+              "description": "Context window size"
+            },
+            "mirostat": {
+              "type": "integer",
+              "enum": [0, 1, 2],
+              "default": 0,
+              "description": "Mirostat sampling mode"
+            },
+            "mirostat_eta": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0.1,
+              "description": "Mirostat learning rate"
+            },
+            "mirostat_tau": {
+              "type": "number",
+              "minimum": 0,
+              "default": 5.0,
+              "description": "Mirostat target entropy"
+            }
+          },
+          "additionalProperties": true
+        },
+        "ollama_url": {
+          "type": "string",
+          "description": "Ollama server URL",
+          "default": "http://localhost:11434",
+          "format": "uri",
+          "examples": ["http://localhost:11434", "http://ollama-server:11434"]
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 60,
+          "description": "Request timeout in seconds"
+        }
+      },
+      "required": ["model", "prompt"],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "Whether the generation was successful"
+        },
+        "response": {
+          "type": "string",
+          "description": "The generated text response from Ollama"
+        },
+        "model": {
+          "type": "string",
+          "description": "The model used for generation"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the response was created"
+        },
+        "done": {
+          "type": "boolean",
+          "description": "Whether the generation is complete"
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Context data for maintaining conversation state"
+        },
+        "total_duration": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total time taken for generation (nanoseconds)"
+        },
+        "load_duration": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Time taken to load the model (nanoseconds)"
+        },
+        "prompt_eval_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tokens in the prompt"
+        },
+        "prompt_eval_duration": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Time taken to evaluate the prompt (nanoseconds)"
+        },
+        "eval_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tokens generated"
+        },
+        "eval_duration": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Time taken to generate tokens (nanoseconds)"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if generation failed"
+        },
+        "error_type": {
+          "type": "string",
+          "enum": [
+            "INPUT_PARSE_ERROR",
+            "VALIDATION_ERROR", 
+            "REQUEST_MARSHAL_ERROR",
+            "HTTP_REQUEST_ERROR",
+            "RESPONSE_PARSE_ERROR"
+          ],
+          "description": "Type of error that occurred"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata about the generation process",
+          "properties": {
+            "input_prompt_length": {
+              "type": "integer",
+              "description": "Length of the input prompt in characters"
+            },
+            "response_length": {
+              "type": "integer",
+              "description": "Length of the generated response in characters"
+            },
+            "ollama_url": {
+              "type": "string",
+              "description": "URL of the Ollama server used"
+            },
+            "stream_mode": {
+              "type": "boolean",
+              "description": "Whether streaming mode was enabled"
+            },
+            "processing_complete": {
+              "type": "boolean",
+              "description": "Whether processing completed successfully"
+            },
+            "error_stage": {
+              "type": "string",
+              "description": "Stage where error occurred (if any)"
+            },
+            "missing_field": {
+              "type": "string",
+              "description": "Missing required field (for validation errors)"
+            },
+            "raw_response": {
+              "type": "string",
+              "description": "Raw response from Ollama (for debugging)"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "required": ["success", "metadata"],
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "name": "Simple Text Generation",
+      "description": "Basic text generation with a simple prompt",
+      "input": {
+        "model": "llama2",
+        "prompt": "Explain quantum computing in simple terms",
+        "stream": false
+      },
+      "expected_output": {
+        "success": true,
+        "response": "Quantum computing is a revolutionary computing paradigm...",
+        "model": "llama2",
+        "done": true
+      }
+    },
+    {
+      "name": "Code Generation",
+      "description": "Generate code with specific parameters",
+      "input": {
+        "model": "codellama",
+        "prompt": "Write a Python function to calculate fibonacci numbers",
+        "stream": false,
+        "options": {
+          "temperature": 0.2,
+          "num_predict": 256
+        }
+      },
+      "expected_output": {
+        "success": true,
+        "response": "def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)",
+        "model": "codellama",
+        "done": true
+      }
+    },
+    {
+      "name": "Conversation with Context",
+      "description": "Continue a conversation using context",
+      "input": {
+        "model": "llama2",
+        "prompt": "What was my previous question about?",
+        "context": [1, 2, 3, 4, 5],
+        "stream": false
+      },
+      "expected_output": {
+        "success": true,
+        "response": "Your previous question was about quantum computing...",
+        "model": "llama2",
+        "done": true,
+        "context": [1, 2, 3, 4, 5, 6, 7, 8]
+      }
+    }
+  ],
+  "security": {
+    "network_access": {
+      "required": true,
+      "reason": "Needs to communicate with Ollama server via HTTP API"
+    },
+    "file_write": {
+      "required": true,
+      "reason": "Writes output.json with generation results"
+    }
+  },
+  "performance": {
+    "memory_usage": "Low to Medium (depends on model size)",
+    "execution_time": "Variable (depends on model and prompt complexity)",
+    "network_bandwidth": "Medium (model responses can be large)"
+  },
+  "troubleshooting": {
+    "common_errors": {
+      "HTTP_REQUEST_ERROR": "Ensure Ollama server is running and accessible at the specified URL",
+      "VALIDATION_ERROR": "Check that required fields (model, prompt) are provided",
+      "RESPONSE_PARSE_ERROR": "Verify Ollama server is responding with valid JSON"
+    },
+    "debugging": {
+      "enable_logging": "Check Float logs for detailed error messages",
+      "verify_connectivity": "Test Ollama server connectivity separately",
+      "check_model": "Ensure the specified model is available in Ollama"
+    }
+  }
+} 
