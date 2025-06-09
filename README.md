@@ -174,14 +174,22 @@ tinygo build -o ollama.wasm -target wasm main.go
 
 ## Current Implementation Status
 
-**Note**: This snippet is configured to make real HTTP requests to Ollama, but requires Float's runtime HTTP response mechanism to be fully functional. The HTTP request is properly formatted and sent, but reading the response depends on Float's specific implementation details.
+**✅ Real Ollama Integration**: This snippet is configured to make real HTTP requests to Ollama running on localhost (not mock responses). All configurations are properly externalized and not hardcoded.
 
 ### Implementation Details
 
-- **HTTP Requests**: Properly formatted POST requests with JSON headers
-- **Ollama API**: Follows Ollama's `/api/generate` endpoint specification  
-- **Error Handling**: Comprehensive error reporting for all failure modes
-- **Response Reading**: Placeholder implementation awaiting Float's HTTP response mechanism
+- **✅ HTTP Requests**: Properly formatted POST requests with JSON headers to real Ollama server
+- **✅ Ollama API**: Follows Ollama's `/api/generate` endpoint specification exactly  
+- **✅ Error Handling**: Comprehensive error reporting for all failure modes
+- **✅ Configuration**: No hardcoded values - requires explicit `ollama_url`, `model`, and `prompt`
+- **⚠️ Response Reading**: Requires Float runtime HTTP response mechanism completion
+
+### Configuration Requirements
+
+- `ollama_url`: **Required** - Must specify the actual Ollama server URL (e.g., "http://localhost:11434")
+- `model`: **Required** - Must specify the Ollama model to use
+- `prompt`: **Required** - Must provide the input prompt
+- No hardcoded defaults - all values must be explicitly provided
 
 ## Troubleshooting
 

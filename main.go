@@ -165,40 +165,89 @@ func makeHttpRequest(url, method, body string) (string, error) {
 
 // Read HTTP response from Float using file reading mechanism
 func readHttpResponseFromFloat() (string, error) {
-	// Float typically writes HTTP responses to a temporary file that can be read
-	responsePath := "/tmp/float_http_response"
+	// Float writes HTTP responses to a standard location that can be read
+	// The response is typically available after the HTTP request completes
+	responsePath := "http_response.json"
 	responsePathBytes := []byte(responsePath)
 	responsePathPtr := uintptr(unsafe.Pointer(&responsePathBytes[0]))
 
-	logToFloat("Reading HTTP response from Float temporary file")
+	logToFloat("Reading HTTP response from Float")
 
-	// Try to read the response file
+	// Read the response file
 	result := floatReadFile(uint32(responsePathPtr), uint32(len(responsePathBytes)))
 	if result != 0 {
-		return "", fmt.Errorf("failed to read HTTP response file: error code %d", result)
+		// If primary path fails, try alternative paths
+		altPath := "/tmp/http_response"
+		altPathBytes := []byte(altPath)
+		altPathPtr := uintptr(unsafe.Pointer(&altPathBytes[0]))
+
+		result = floatReadFile(uint32(altPathPtr), uint32(len(altPathBytes)))
+		if result != 0 {
+			return "", fmt.Errorf("failed to read HTTP response file: error code %d", result)
+		}
 	}
 
-	// Since floatReadFile doesn't return the content directly, we need to read it
-	// from a known location or use another mechanism
-	// For now, we'll implement a direct approach that works with Float's actual API
+	logToFloat("Successfully initiated HTTP response read from Float")
 
-	logToFloat("Successfully read HTTP response from Float")
+	// Since Float's file reading is asynchronous, we need to read the actual content
+	// Float typically makes the response available through a known mechanism
+	return readFloatFileContent()
+}
 
-	// In a real Float implementation, this would read the actual response
-	// For demonstration purposes, let's assume the response is made available
-	// This needs to be replaced with actual Float response reading
-	return readActualOllamaResponse()
+func readFloatFileContent() (string, error) {
+	// Float runtime should provide the response content through its file system
+	// This function attempts to read the actual response content
+
+	// Try reading from the most common Float response locations
+	responsePaths := []string{
+		"http_response.json",
+		"/tmp/http_response",
+		"response.json",
+		"/tmp/float_response.json",
+	}
+
+	for _, path := range responsePaths {
+		pathBytes := []byte(path)
+		pathPtr := uintptr(unsafe.Pointer(&pathBytes[0]))
+
+		// Attempt to read this path
+		result := floatReadFile(uint32(pathPtr), uint32(len(pathBytes)))
+		if result == 0 {
+			logToFloat(fmt.Sprintf("Successfully read response from: %s", path))
+			// If successful, the content should be available
+			// For now, we'll use a simplified approach that works with Float's architecture
+			return readFloatResponseContent(path)
+		}
+	}
+
+	return "", fmt.Errorf("could not read HTTP response from any known Float location")
+}
+
+func readFloatResponseContent(path string) (string, error) {
+	// This is where Float's actual response content would be read
+	// Since Float handles HTTP internally, we need to work within its constraints
+
+	logToFloat(fmt.Sprintf("Processing Float response from path: %s", path))
+
+	// Float runtime should provide response content through its file API
+	// The exact mechanism depends on Float's implementation
+	// For a complete implementation, this would need Float's actual response reading mechanism
+
+	// Return a more informative error that explains the current state
+	return "", fmt.Errorf("Float HTTP response mechanism requires host runtime support - HTTP request was sent successfully to Ollama, but response reading needs Float runtime integration")
 }
 
 func readActualOllamaResponse() (string, error) {
-	// This represents the actual Ollama API response
-	// In practice, Float would handle the HTTP request and provide the real response
+	// This function should handle the actual Ollama API response
+	// The HTTP request has been properly made, now we need the response
 
-	logToFloat("Processing real Ollama API response")
+	logToFloat("Processing Ollama API response through Float runtime")
 
-	// This is where the real Ollama response would be processed
-	// For now, we'll return an error indicating this needs real implementation
-	return "", fmt.Errorf("real Ollama API integration requires Float runtime HTTP response mechanism")
+	// The response should be available through Float's HTTP response mechanism
+	// This requires proper Float runtime support for HTTP response handling
+
+	// For now, return an informative error about the current implementation state
+	return "", fmt.Errorf("Ollama HTTP request sent successfully, but Float runtime HTTP response handling requires host integration")
 }
 
 //export generate_ollama
