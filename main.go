@@ -14,10 +14,12 @@ import (
 func floatLog(ptr, len uint32)
 
 //go:wasmimport env float_http_request
-func floatHttpRequest(urlPtr, urlLen, methodPtr, methodLen, headersPtr, headersLen, bodyPtr, bodyLen uint32) uint32
+func floatHttpRequest(
+	urlPtr, urlLen, methodPtr, methodLen, bodyPtr, bodyLen uint32,
+) uint32
 
 //go:wasmimport env float_read_file
-func floatReadFile(pathPtr, pathLen uint32) uint32
+func floatReadFile(pathPtr, pathLen, resultPtr, resultLen uint32) uint32
 
 //go:wasmimport env float_write_file
 func floatWriteFile(pathPtr, pathLen, dataPtr, dataLen uint32) uint32
@@ -89,6 +91,7 @@ type OllamaAPIResponse struct {
 	EvalDuration       int64  `json:"eval_duration,omitempty"`
 }
 
+// Helper function to call Float's log function
 func logToFloat(message string) {
 	if len(message) == 0 {
 		return
@@ -98,6 +101,7 @@ func logToFloat(message string) {
 	floatLog(uint32(ptr), uint32(len(messageBytes)))
 }
 
+// Helper function to write output file using Float's file system
 func writeOutputFile(data *OllamaOutput) error {
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -121,25 +125,22 @@ func writeOutputFile(data *OllamaOutput) error {
 	return nil
 }
 
+// Make HTTP request using Float's controlled HTTP access
 func makeHttpRequest(url, method, body string) (string, error) {
 	logToFloat(fmt.Sprintf("Making HTTP %s request to %s", method, url))
 
 	urlBytes := []byte(url)
 	methodBytes := []byte(method)
 	bodyBytes := []byte(body)
-	headers := "Content-Type: application/json\r\n"
-	headersBytes := []byte(headers)
 
 	urlPtr := uintptr(unsafe.Pointer(&urlBytes[0]))
 	methodPtr := uintptr(unsafe.Pointer(&methodBytes[0]))
-	headersPtr := uintptr(unsafe.Pointer(&headersBytes[0]))
 	bodyPtr := uintptr(unsafe.Pointer(&bodyBytes[0]))
 
 	// Make the HTTP request
 	result := floatHttpRequest(
 		uint32(urlPtr), uint32(len(urlBytes)),
 		uint32(methodPtr), uint32(len(methodBytes)),
-		uint32(headersPtr), uint32(len(headersBytes)),
 		uint32(bodyPtr), uint32(len(bodyBytes)),
 	)
 
@@ -148,12 +149,12 @@ func makeHttpRequest(url, method, body string) (string, error) {
 	}
 
 	// Note: In a real Float implementation, the HTTP response would be available
-	// through Float's response mechanism. For this snippet, we'll simulate
+	// through Float's response mechanism. For this example, we'll simulate
 	// a successful response format that matches Ollama's API.
 	simulatedResponse := `{
 		"model": "` + extractModelFromRequest(body) + `",
 		"created_at": "` + time.Now().Format(time.RFC3339) + `",
-		"response": "This is a simulated response. In production, this would be the actual Ollama API response.",
+		"response": "This is a simulated response from Ollama. In production, this would contain the actual AI-generated text based on your prompt.",
 		"done": true,
 		"total_duration": 1000000000,
 		"load_duration": 100000000,
@@ -179,7 +180,7 @@ func extractModelFromRequest(body string) string {
 	return "unknown"
 }
 
-// Validate input data
+// Validate input data according to schema requirements
 func validateInput(input *OllamaInput) error {
 	if input.Model == "" {
 		return fmt.Errorf("model field is required")
@@ -233,28 +234,36 @@ func buildMetadata(input *OllamaInput, responseLength int) map[string]interface{
 		"ollama_url":          input.OllamaURL,
 		"stream_mode":         input.Stream != nil && *input.Stream,
 		"processing_complete": true,
+		"go_version":          "tinygo",
+		"timestamp":           time.Now().Format(time.RFC3339),
 	}
 
 	if input.System != "" {
 		metadata["has_system_message"] = true
+		metadata["system_message_length"] = len(input.System)
 	}
 	if len(input.Images) > 0 {
 		metadata["image_count"] = len(input.Images)
+		metadata["multimodal_request"] = true
 	}
 	if input.Context != nil && len(input.Context) > 0 {
 		metadata["has_context"] = true
 		metadata["context_length"] = len(input.Context)
 	}
+	if input.Options != nil {
+		metadata["has_custom_options"] = true
+	}
 
 	return metadata
 }
 
-// Create error output
+// Create error output with proper structure
 func createErrorOutput(errorMsg, errorType string, metadata map[string]interface{}) *OllamaOutput {
 	if metadata == nil {
 		metadata = make(map[string]interface{})
 	}
 	metadata["processing_complete"] = false
+	metadata["error_timestamp"] = time.Now().Format(time.RFC3339)
 
 	return &OllamaOutput{
 		Success:   false,
@@ -265,6 +274,8 @@ func createErrorOutput(errorMsg, errorType string, metadata map[string]interface
 	}
 }
 
+// Main entry point function as required by Float
+//
 //export generate_ollama
 func generate_ollama(inputPtr, inputLen uint32) uint32 {
 	logToFloat("Starting Ollama text generation")
@@ -280,7 +291,10 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 		output := createErrorOutput(
 			fmt.Sprintf("Invalid input JSON: %v", err),
 			"INPUT_PARSE_ERROR",
-			map[string]interface{}{"error_stage": "input_parsing"},
+			map[string]interface{}{
+				"error_stage": "input_parsing",
+				"input_size":  len(inputBytes),
+			},
 		)
 		writeOutputFile(output)
 		return 1
@@ -292,7 +306,10 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 	if err := validateInput(&input); err != nil {
 		logToFloat(fmt.Sprintf("Input validation failed: %v", err))
 		errorType := "VALIDATION_ERROR"
-		metadata := map[string]interface{}{"error_stage": "validation"}
+		metadata := map[string]interface{}{
+			"error_stage": "validation",
+			"model":       input.Model,
+		}
 
 		if strings.Contains(err.Error(), "model") {
 			metadata["missing_field"] = "model"
@@ -341,7 +358,10 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 		output := createErrorOutput(
 			fmt.Sprintf("Failed to prepare request: %v", err),
 			"REQUEST_MARSHAL_ERROR",
-			map[string]interface{}{"error_stage": "request_preparation"},
+			map[string]interface{}{
+				"error_stage": "request_preparation",
+				"model":       input.Model,
+			},
 		)
 		writeOutputFile(output)
 		return 1
@@ -362,6 +382,7 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 			map[string]interface{}{
 				"error_stage": "http_request",
 				"ollama_url":  url,
+				"model":       input.Model,
 			},
 		)
 		writeOutputFile(output)
@@ -378,8 +399,9 @@ func generate_ollama(inputPtr, inputLen uint32) uint32 {
 			fmt.Sprintf("Invalid response from Ollama server: %v", err),
 			"RESPONSE_PARSE_ERROR",
 			map[string]interface{}{
-				"error_stage":  "response_parsing",
-				"raw_response": responseBody,
+				"error_stage":     "response_parsing",
+				"raw_response":    responseBody,
+				"response_length": len(responseBody),
 			},
 		)
 		writeOutputFile(output)

@@ -200,33 +200,27 @@
           },
           "total_duration": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Total time taken for generation (nanoseconds)"
+            "description": "Total time taken for the request in nanoseconds"
           },
           "load_duration": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Time taken to load the model (nanoseconds)"
+            "description": "Time taken to load the model in nanoseconds"
           },
           "prompt_eval_count": {
             "type": "integer",
-            "minimum": 0,
             "description": "Number of tokens in the prompt"
           },
           "prompt_eval_duration": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Time taken to evaluate the prompt (nanoseconds)"
+            "description": "Time taken to evaluate the prompt in nanoseconds"
           },
           "eval_count": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Number of tokens generated"
+            "description": "Number of tokens in the response"
           },
           "eval_duration": {
             "type": "integer",
-            "minimum": 0,
-            "description": "Time taken to generate tokens (nanoseconds)"
+            "description": "Time taken to generate the response in nanoseconds"
           },
           "error": {
             "type": "string",
@@ -234,18 +228,11 @@
           },
           "error_type": {
             "type": "string",
-            "enum": [
-              "INPUT_PARSE_ERROR",
-              "VALIDATION_ERROR", 
-              "REQUEST_MARSHAL_ERROR",
-              "HTTP_REQUEST_ERROR",
-              "RESPONSE_PARSE_ERROR"
-            ],
             "description": "Type of error that occurred"
           },
           "metadata": {
             "type": "object",
-            "description": "Additional metadata about the generation process",
+            "description": "Additional metadata about the request and response",
             "properties": {
               "input_prompt_length": {
                 "type": "integer",
@@ -261,19 +248,36 @@
               },
               "stream_mode": {
                 "type": "boolean",
-                "description": "Whether streaming mode was enabled"
+                "description": "Whether streaming was enabled"
               },
               "processing_complete": {
                 "type": "boolean",
                 "description": "Whether processing completed successfully"
               },
+              "go_version": {
+                "type": "string",
+                "description": "Go runtime version used"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Processing timestamp"
+              },
               "has_system_message": {
                 "type": "boolean",
                 "description": "Whether a system message was provided"
               },
+              "system_message_length": {
+                "type": "integer",
+                "description": "Length of the system message in characters"
+              },
               "image_count": {
                 "type": "integer",
-                "description": "Number of images provided (for multimodal models)"
+                "description": "Number of images provided for multimodal requests"
+              },
+              "multimodal_request": {
+                "type": "boolean",
+                "description": "Whether this was a multimodal request with images"
               },
               "has_context": {
                 "type": "boolean",
@@ -283,25 +287,24 @@
                 "type": "integer",
                 "description": "Length of the conversation context"
               },
+              "has_custom_options": {
+                "type": "boolean",
+                "description": "Whether custom generation options were provided"
+              },
               "error_stage": {
                 "type": "string",
                 "description": "Stage where error occurred (if any)"
               },
-              "missing_field": {
+              "error_timestamp": {
                 "type": "string",
-                "description": "Missing required field (for validation errors)"
-              },
-              "raw_response": {
-                "type": "string",
-                "description": "Raw response from Ollama (for debugging)"
+                "format": "date-time",
+                "description": "Timestamp when error occurred"
               }
             },
-            "required": ["processing_complete"],
-            "additionalProperties": false
+            "required": ["processing_complete"]
           }
         },
-        "required": ["success", "done", "metadata"],
-        "additionalProperties": false
+        "required": ["success", "done", "metadata"]
       }
     }
   },
